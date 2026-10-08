@@ -1,0 +1,17 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Build output
+bin/
+obj/
+
+# Debug files
+*.pdb
+
+# Rider
+.idea/
+
+# Environment
+appsettings.Development.json

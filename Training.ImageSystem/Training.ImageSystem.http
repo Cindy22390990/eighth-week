@@ -1,0 +1,6 @@
+@Training.ImageSystem_HostAddress = http://localhost:5113
+
+GET {{Training.ImageSystem_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
