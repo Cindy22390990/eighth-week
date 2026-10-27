@@ -1,7 +1,10 @@
-using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using NLog;
+using NLog.Web;
+using System.Text;
+using Training.ImageSystem.Background_Worker;
 using Training.ImageSystem.Data;
 using Training.ImageSystem.Repositories;
 using Training.ImageSystem.Repositories.Interfaces;
@@ -17,15 +20,64 @@ public class Program
 {
     public static async Task Main(string[] args)
     {
-        var builder = WebApplication.CreateBuilder(args);
+        var logger =
+            NLog.LogManager
+            .Setup()
+            .LoadConfigurationFromFile(
+                "NLog.config")
+            .GetCurrentClassLogger();
 
 
-        // Controller
-        builder.Services.AddControllers();
+        try
+        {
+
+            var builder =
+                WebApplication.CreateBuilder(args);
 
 
-        // OpenAPI / Swagger
-        builder.Services.AddOpenApi();
+
+            builder.Logging.ClearProviders();
+
+            builder.Host.UseNLog();
+
+
+            // Controller
+            builder.Services.AddControllers();
+
+
+        // Swagger
+        builder.Services.AddEndpointsApiExplorer();
+        builder.Services.AddSwaggerGen(options =>
+        {
+            options.AddSecurityDefinition(
+                "Bearer",
+                new Microsoft.OpenApi.OpenApiSecurityScheme
+                {
+                    Name = "Authorization",
+                    Type = Microsoft.OpenApi.SecuritySchemeType.Http,
+                    Scheme = "bearer",
+                    BearerFormat = "JWT",
+                    In = Microsoft.OpenApi.ParameterLocation.Header,
+                    Description =
+                        "輸入 JWT Token"
+                });
+
+
+            options.AddSecurityRequirement(
+                document =>
+                {
+                    return new Microsoft.OpenApi.OpenApiSecurityRequirement
+                    {
+                        {
+                            new Microsoft.OpenApi.OpenApiSecuritySchemeReference(
+                                "Bearer",
+                                document
+                            ),
+                            new List<string>()
+                        }
+                    };
+                });
+        });
 
 
         // Database
@@ -42,13 +94,14 @@ public class Program
         builder.Services.AddScoped<
             IImageJobRepository,
             ImageJobRepository>();
+        builder.Services.AddHostedService<ImageProcessingWorker>();
 
         // Services
         builder.Services.AddScoped<IJwtService, JwtService>();
         builder.Services.AddScoped<IAuthService, AuthService>();
         builder.Services.AddScoped<IImageJobService, ImageJobService>();
         builder.Services.AddScoped<IPasswordService, PasswordService>();
-
+        builder.Services.AddScoped<PythonImageProcessor>();
 
         // JWT Authentication
         builder.Services
@@ -116,9 +169,10 @@ public class Program
 
         if (app.Environment.IsDevelopment())
         {
-            
+            app.UseSwagger();
+            app.UseSwaggerUI();
         }
-        app.MapOpenApi();
+        
 
         app.UseHttpsRedirection();
 
@@ -135,6 +189,20 @@ public class Program
         app.MapControllers();
 
 
-        app.Run();
+            app.Run();
+
+        }
+        catch (Exception ex)
+        {
+            logger.Error(
+                ex,
+                "Application stopped");
+
+            throw;
+        }
+        finally
+        {
+            NLog.LogManager.Shutdown();
+        }
     }
 }
